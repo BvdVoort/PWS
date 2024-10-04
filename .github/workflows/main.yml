@@ -1,0 +1,17 @@
+name: Rust
+
+on:
+  push:
+    paths:
+      - 'cargo init'
+
+jobs:
+
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v2
+    - name: Run cargo build
+      run: cargo build --verbose
