@@ -1934,7 +1934,7 @@
 			"__cHei": 21,
 			"identifier": "SunnyLand_by_Ansimuz",
 			"uid": 2,
-			"relPath": "../../../../AppData/Local/Programs/ldtk/extraFiles/samples/atlas/SunnyLand_by_Ansimuz-extended.png",
+			"relPath": "atlas/SunnyLand_by_Ansimuz-extended.png",
 			"embedAtlas": null,
 			"pxWid": 368,
 			"pxHei": 336,

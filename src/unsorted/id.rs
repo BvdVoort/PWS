@@ -19,7 +19,7 @@ impl<T> Id<T>
 impl<T> From<Id<T>> for Entity
 {
     fn from(value: Id<T>) -> Self {
-        value.id()
+        value.entity()
     }
 }
 

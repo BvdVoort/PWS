@@ -9,7 +9,7 @@ use bevy_ecs_ldtk::{
 use bevy_rapier2d::prelude::{
     CharacterLength, Collider, KinematicCharacterController, Velocity 
 };
-use super::{general_components::Promise, input::input_sets::StandardInput};
+use super::{unsorted::Promise, input::input_sets::StandardInput};
 
 
 #[derive(Default, Bundle, LdtkEntity)]
