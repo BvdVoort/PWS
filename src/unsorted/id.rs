@@ -1,6 +1,7 @@
 use bevy::{prelude::{Component, Entity}, reflect::Reflect};
 use std::marker::PhantomData;
 
+// maybe this shouldn't excist
 #[derive(Component, Reflect, Clone, Copy)]
 pub struct Id<T>(Entity, #[reflect(ignore)] PhantomData<T>);
 impl<T> From<Entity> for Id<T>
