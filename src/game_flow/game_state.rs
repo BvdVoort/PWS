@@ -9,5 +9,5 @@ pub enum GameState {
     // LoadingLevel // or can this be the loading screen?
     Playing,
     Completed,
-    Dead,
+    Defeated,
 }

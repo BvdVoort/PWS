@@ -4,7 +4,7 @@ mod player;
 mod physics;
 mod game_flow;
 
-use bevy::{app::{App, PostStartup, Startup, Update}, asset::AssetServer, prelude::{AppExtStates, Camera2dBundle, Commands, OnExit, Res, ResMut}, DefaultPlugins};
+use bevy::{app::{App, PostStartup, PreStartup, Startup, Update}, asset::{AssetServer, Handle}, prelude::{AppExtStates, Camera2dBundle, Commands, OnEnter, OnExit, Res, ResMut, Resource}, text::Font, utils::default, DefaultPlugins};
 use bevy_ecs_ldtk::{LdtkPlugin, LdtkWorldBundle, LevelSelection};
 use bevy_inspector_egui::quick::WorldInspectorPlugin;
 use bevy_rapier2d::{plugin::{NoUserData, RapierPhysicsPlugin}, render::RapierDebugRenderPlugin};
@@ -14,7 +14,7 @@ use unsorted::LDTKEnumTagPluginCustom;
 
 use unsorted::ldtk_level_handler;
 
-// why does the movement lag?! (disable player movement when in debug mode)
+// why does (debug) the movement lag?! (disable player movement when in debug mode)
 pub fn main() {
     let mut app = App::new();
     
@@ -29,6 +29,10 @@ pub fn main() {
 
         .add_systems(Startup, setup)
         .insert_resource(LevelSelection::index(0))
+
+        .add_systems(PreStartup, load_fonts)
+        .add_systems(OnEnter(GameState::Defeated), spawn_defeat_text)
+        .add_systems(OnEnter(GameState::Completed), spawn_complete_text)
 
         // temp
         .add_systems(Update, kill_or_complete_on_keypress)
@@ -45,6 +49,7 @@ pub fn main() {
     app.run();
 }
 
+
 fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
     let mut camera = Camera2dBundle::default();
     camera.projection.scale = 0.5;
@@ -58,15 +63,85 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
     });
 }
 
+// should be moved to font plugin
+#[derive(Resource)]
+struct FontHandles {
+    fira_sans: Handle<Font> 
+}
+
+impl FontHandles {
+    pub fn default_font(&self) -> Handle<Font> { self.fira_sans.clone() }
+}
+
+fn load_fonts(
+    mut commands: Commands,
+    asset_server: Res<AssetServer>,
+) {
+    commands.insert_resource(FontHandles {
+        fira_sans: asset_server.load(r"C:\Users\basvd\Downloads\FiraSans-Bold.ttf"), // should replace path
+    });
+}
+
+
 // temp test junk
 fn kill_or_complete_on_keypress(
     input: Res<bevy::input::ButtonInput<bevy::prelude::KeyCode>>,
     mut game_state: ResMut<bevy::prelude::NextState<GameState>>  
 ) {
     if input.pressed(bevy::prelude::KeyCode::KeyK) {
-        game_state.set(GameState::Dead);
+        game_state.set(GameState::Defeated);
     }
     else if input.pressed(bevy::prelude::KeyCode::KeyV) {
         game_state.set(GameState::Completed);
     }
+}
+
+use bevy::text::{
+    Text2dBundle,
+    Text,
+    TextStyle,
+};
+
+fn spawn_defeat_text(
+    mut commands: Commands,
+    fonts: Res<FontHandles>
+) {
+    let text_style = TextStyle {
+        font: fonts.default_font(),
+        font_size: 60.0,
+        ..default()
+    };
+
+    let mut text = Text2dBundle {
+        text: Text::from_section("You died!", text_style.clone()),
+        ..default()
+    };
+
+    // the camera should be moved, not the text!
+    text.transform.translation.x += 1280.0 / 4.0;
+    text.transform.translation.y += 720.0 / 4.0;
+
+    commands.spawn(text);
+}
+
+fn spawn_complete_text(
+    mut commands: Commands,
+    fonts: Res<FontHandles>
+) {
+    let text_style = TextStyle {
+        font: fonts.default_font(),
+        font_size: 60.0,
+        ..default()
+    };
+
+    let mut text = Text2dBundle {
+        text: Text::from_section("You win!", text_style.clone()),
+        ..default()
+    };
+
+    // the camera should be moved, not the text!
+    text.transform.translation.x += 1280.0 / 4.0;
+    text.transform.translation.y += 720.0 / 4.0;
+
+    commands.spawn(text);
 }
