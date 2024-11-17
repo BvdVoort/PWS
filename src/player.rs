@@ -1,6 +1,6 @@
 use bevy::{
     app::{Plugin, Update}, input::{ButtonInput, InputPlugin}, math::Vec2, prelude::{
-        default, Added, Bundle, Commands, Entity, IntoSystemConfigs, KeyCode, Query, Res 
+        default, in_state, Added, Bundle, Commands, Entity, IntoSystemConfigs, KeyCode, Query, Res 
     }
 };
 use bevy_ecs_ldtk::{
@@ -9,7 +9,9 @@ use bevy_ecs_ldtk::{
 use bevy_rapier2d::prelude::{
     CharacterLength, Collider, KinematicCharacterController, Velocity 
 };
-use super::{unsorted::Promise, input::input_sets::StandardInput};
+use crate::game_flow::GameState;
+
+use super::unsorted::Promise;
 
 
 #[derive(Default, Bundle, LdtkEntity)]
@@ -27,7 +29,7 @@ struct Player;
 
 fn proces_player_promise(
     mut commands: Commands,
-    players: Query<Entity, Added<Promise<Player>>>
+    players: Query<Entity, Added<Promise<Player>>> // can be changed to a add event observer thingy
 ) {
     // There should only be one player. So we could use player.single()
     for entity in players.iter()
@@ -55,7 +57,7 @@ impl Plugin for PlayerPlugin
         app
             .register_ldtk_entity::<PlayerBundle>("Player")     
             .add_systems(Update, proces_player_promise)
-            .add_systems(Update, player_movement.in_set(StandardInput))
+            .add_systems(Update, player_movement.run_if(in_state(GameState::Playing)))
             ;
     }
 }
