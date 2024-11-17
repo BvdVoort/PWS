@@ -10,5 +10,11 @@ use std::marker::PhantomData;
 /// [component]: Component
 /// [phantomdata]: PhantomData
 /// 
-#[derive(Default, Component)]
+#[derive(Component)]
 pub struct Promise<T>(PhantomData<T>);
+
+impl<T> Default for Promise<T> {
+    fn default() -> Self {
+        Self(PhantomData)
+    }
+}
