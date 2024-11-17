@@ -15,6 +15,9 @@ impl<T> Id<T>
 {
     pub fn new(entity: Entity) -> Self { Self(entity, PhantomData) }
     pub fn entity(&self) -> Entity { self.0 }
+    pub unsafe fn default() -> Self {
+        Self(Entity::PLACEHOLDER, Default::default())
+    }
 }
 
 impl<T> From<Id<T>> for Entity

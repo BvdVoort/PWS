@@ -4,8 +4,9 @@ mod player;
 mod physics;
 mod game_flow;
 mod font_handing;
+mod enemies;
 
-use bevy::{app::{App, PostStartup, PreStartup, Startup, Update}, asset::{AssetServer, Handle}, prelude::{AppExtStates, Camera2dBundle, Commands, OnEnter, OnExit, Res, ResMut, Resource}, text::Font, utils::default, DefaultPlugins};
+use bevy::{app::{App, Startup, Update}, asset::AssetServer, math::Vec3, prelude::{AppExtStates, Camera, Camera2dBundle, Commands, OnEnter, OnExit, Query, Res, ResMut, Transform, With}, utils::default, DefaultPlugins};
 use bevy_ecs_ldtk::{LdtkPlugin, LdtkWorldBundle, LevelSelection};
 use bevy_inspector_egui::quick::WorldInspectorPlugin;
 use bevy_rapier2d::{plugin::{NoUserData, RapierPhysicsPlugin}, render::RapierDebugRenderPlugin};
@@ -25,7 +26,7 @@ pub fn main() {
         .init_state::<game_flow::GameState>()
 
         .add_plugins(LdtkPlugin)
-        .add_plugins(RapierPhysicsPlugin::<NoUserData>::pixels_per_meter(1.))
+        .add_plugins(RapierPhysicsPlugin::<NoUserData>::pixels_per_meter(10000.))
         .add_plugins(PlayerPlugin)
         .add_plugins(LDTKEnumTagPluginCustom)
 
@@ -35,6 +36,8 @@ pub fn main() {
         .add_plugins(FontPlugin)
         .add_systems(OnEnter(GameState::Defeated), spawn_defeat_text)
         .add_systems(OnEnter(GameState::Completed), spawn_complete_text)
+        
+        .add_plugins(enemies::EnemyPlugin)
 
         // temp
         .add_systems(Update, kill_or_complete_on_keypress)
@@ -55,7 +58,7 @@ pub fn main() {
 fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
     let mut camera = Camera2dBundle::default();
     camera.projection.scale = 0.5;
-    camera.transform.translation.x += 1280.0 / 4.0;
+    camera.transform.translation.x += 1280.0 / 4.0 + 100.;
     camera.transform.translation.y += 720.0 / 4.0;
     commands.spawn(camera);
 
@@ -86,7 +89,8 @@ use bevy::text::{
 
 fn spawn_defeat_text(
     mut commands: Commands,
-    fonts: Res<FontHandles>
+    fonts: Res<FontHandles>,
+    mut camera: Query<&mut Transform, With<Camera>>,
 ) {
     let text_style = TextStyle {
         font: fonts.default_font(),
@@ -99,16 +103,15 @@ fn spawn_defeat_text(
         ..default()
     };
 
-    // the camera should be moved, not the text!
-    text.transform.translation.x += 1280.0 / 4.0;
-    text.transform.translation.y += 720.0 / 4.0;
+    camera.single_mut().translation = Vec3::ZERO;
 
     commands.spawn(text);
 }
 
 fn spawn_complete_text(
     mut commands: Commands,
-    fonts: Res<FontHandles>
+    fonts: Res<FontHandles>,
+    mut camera: Query<&mut Transform, With<Camera>>,
 ) {
     let text_style = TextStyle {
         font: fonts.default_font(),
@@ -121,9 +124,7 @@ fn spawn_complete_text(
         ..default()
     };
 
-    // the camera should be moved, not the text!
-    text.transform.translation.x += 1280.0 / 4.0;
-    text.transform.translation.y += 720.0 / 4.0;
+    camera.single_mut().translation = Vec3::ZERO;
 
     commands.spawn(text);
 }
