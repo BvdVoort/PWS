@@ -31,14 +31,12 @@ use enums::EnumId;
 pub struct LDTKEnumTagPluginCustom;
 impl Plugin for LDTKEnumTagPluginCustom {
     fn build(&self, app: &mut bevy::prelude::App) {
-        app.add_systems(PreStartup, setup);
+        app.add_systems(PreStartup, |world: &mut World| {
+            world
+                .register_component_hooks::<TileEnumTags>()
+                .on_add(proces_tile_enumtags);
+        });
     }
-}
-
-fn setup(world: &mut World) {
-    world
-        .register_component_hooks::<TileEnumTags>()
-        .on_add(proces_tile_enumtags);
 }
 
 fn proces_tile_enumtags(mut world: DeferredWorld, entity: Entity, _component_id: ComponentId) {

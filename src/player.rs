@@ -1,6 +1,6 @@
 use bevy::{
-    app::{Plugin, Update}, input::{ButtonInput, InputPlugin}, math::Vec2, prelude::{
-        default, in_state, Added, Bundle, Commands, Entity, IntoSystemConfigs, KeyCode, Query, Res 
+    app::{Plugin, PreStartup, Update}, ecs::{component::ComponentId, world::DeferredWorld}, input::{ButtonInput, InputPlugin}, math::Vec2, prelude::{
+        default, in_state, Bundle, Entity, IntoSystemConfigs, KeyCode, Query, Res, World 
     }
 };
 use bevy_ecs_ldtk::{
@@ -27,24 +27,6 @@ struct PlayerBundle {
 struct Player;
 
 
-fn proces_player_promise(
-    mut commands: Commands,
-    players: Query<Entity, Added<Promise<Player>>> // can be changed to a add event observer thingy
-) {
-    // There should only be one player. So we could use player.single()
-    for entity in players.iter()
-    {
-        commands.entity(entity).insert((
-            Collider::capsule_y(4., 4.),
-            KinematicCharacterController {
-                offset: CharacterLength::Absolute(0.08),
-                up: Vec2::Y,
-                ..default()
-            }
-        ));
-    }
-}
-
 pub struct PlayerPlugin;
 impl Plugin for PlayerPlugin
 {
@@ -55,13 +37,30 @@ impl Plugin for PlayerPlugin
         }
         
         app
-            .register_ldtk_entity::<PlayerBundle>("Player")     
-            .add_systems(Update, proces_player_promise)
+            .register_ldtk_entity::<PlayerBundle>("Player")    
             .add_systems(Update, player_movement.run_if(in_state(GameState::Playing)))
+            .add_systems(PreStartup, |world: &mut World| {
+                world
+                    .register_component_hooks::<Promise<Player>>()
+                    .on_add(proces_player_promise);
+            })
             ;
     }
 }
 
+fn proces_player_promise(mut world: DeferredWorld, entity: Entity, _component_id: ComponentId) {
+    let mut commands = world.commands();
+    let mut entity_commands = commands.entity(entity);
+    entity_commands.insert((
+        Collider::capsule_y(4., 4.),
+        KinematicCharacterController {
+            offset: CharacterLength::Absolute(0.08),
+            up: Vec2::Y,
+            ..default()
+        }
+    ));
+    // entity_commands.remove::<Promise<Player>>();
+}
 
 const GRAVITY: f32 = 0.1;
 const MOVEMENT_SCALER: f32 = 10.;
