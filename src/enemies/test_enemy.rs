@@ -28,7 +28,7 @@ impl Plugin for TestEnemyPlugin
                     .on_add(process_test_enemy_promise);
             })
             .add_systems(Update, test_enemy_killing.run_if(in_state(GameState::Playing)).run_if(resource_exists::<Player>))
-            .add_systems(Update, handle_completion.run_if(all_enemies_dead))
+            .add_systems(Update, handle_completion.run_if(in_state(GameState::Playing)).run_if(all_enemies_dead))
             ;
     }
 }
