@@ -39,7 +39,7 @@ fn process_test_enemy_promise(mut world: DeferredWorld, entity: Entity, _compone
         .insert((Collider::capsule_y(4., 3.), TestEnemy))
         .with_children(|childeren| {
             let mut spatial_bundle = SpatialBundle::default();
-            spatial_bundle.transform.translation.y = 6.;
+            spatial_bundle.transform.translation.y = 5.;
             childeren.spawn((
                 Collider::ball(3.), Sensor,
                 ActiveEvents::COLLISION_EVENTS,
