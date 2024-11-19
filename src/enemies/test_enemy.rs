@@ -3,7 +3,7 @@ use bevy_ecs_ldtk::{app::LdtkEntityAppExt, LdtkEntity};
 use bevy_rapier2d::prelude::{ActiveCollisionTypes, ActiveEvents, Collider, CollisionGroups, Group, Sensor};
 
 use crate::{collision::LocalGroupNames, game_flow::GameState, unsorted::Promise};
-use super::entity_bundle::ObservableCollider;
+use super::entity_bundles::ObservableCollider;
 
 #[derive(Default, Bundle, LdtkEntity)]
 struct TestEnemyBundle {
@@ -16,8 +16,10 @@ struct TestEnemyBundle {
 #[derive(Default, Component)]
 struct TestEnemy;
 impl TestEnemy {
-    const CORNER_RADIUS: f32 = 3.0;
-    const HALF_CAPSULE_HEIGHT: f32 = 4.0;
+    const CORNER_RADIUS: f32 = 4.0;
+    const CAPSULE_HEIGHT: f32 = 8.0;
+
+    const HALF_CAPSULE_HEIGHT: f32 = Self::CAPSULE_HEIGHT / 2.0;
 }
 
 pub struct TestEnemyPlugin;
@@ -36,22 +38,17 @@ impl Plugin for TestEnemyPlugin
     }
 }
 
-// impl a new Promise trait for TestEnemy {} // to make it more secure??
+// #? MAYBE: impl a new Promise trait for TestEnemy {} // to make it more secure??
+// #! TODO: Make a centrale obsever entity for all test enemies. 
 fn process_test_enemy_promise(mut world: DeferredWorld, entity: Entity, _component_id: ComponentId) {
     world.commands().entity(entity)
         .insert((
-            TestEnemy, 
-            ObservableCollider {
-                collider: Collider::capsule_y(TestEnemy::HALF_CAPSULE_HEIGHT, TestEnemy::CORNER_RADIUS),
-                collision_groups: CollisionGroups {
-                    memberships: Group::TEST_ENEMY,
-                    filters: Group::ALL & !Group::TEST_ENEMY_SENSOR
-                },
-                active_physics_events: ActiveEvents::all(),
-                collides_with: ActiveCollisionTypes::all()
+            Collider::capsule_y(TestEnemy::HALF_CAPSULE_HEIGHT, TestEnemy::CORNER_RADIUS),
+            CollisionGroups {
+                memberships: Group::TEST_ENEMY,
+                filters: Group::ALL & !Group::TEST_ENEMY_SENSOR
             },
         ))
-        .observe(test_enemy_handlers::self_player_colision)
         .with_children(|childeren| {
             let mut spatial_bundle = SpatialBundle::default();
             spatial_bundle.transform.translation.y = TestEnemy::HALF_CAPSULE_HEIGHT * 1.1;
@@ -62,32 +59,57 @@ fn process_test_enemy_promise(mut world: DeferredWorld, entity: Entity, _compone
                     collider: Collider::ball(TestEnemy::CORNER_RADIUS), 
                     collision_groups: CollisionGroups {
                         memberships: Group::TEST_ENEMY_SENSOR,
-                        filters: Group::ALL & !Group::TEST_ENEMY,
+                        filters: Group::ALL & !Group::TEST_ENEMY & !Group::TEST_ENEMY_SENSOR,
                     },                     
                     active_physics_events: ActiveEvents::COLLISION_EVENTS,
                     collides_with: ActiveCollisionTypes::all(),
                 }
-            ))
-            .observe(test_enemy_handlers::sensor_player_collision_handler);
+            )).observe(test_enemy_handlers::sensor_player_collision_handler);
+            
+            childeren.spawn((
+                SpatialBundle::default(),
+                Sensor,
+                ObservableCollider {
+                    collider: Collider::capsule_y(TestEnemy::HALF_CAPSULE_HEIGHT, TestEnemy::CORNER_RADIUS * 1.5),
+                    collision_groups: CollisionGroups {
+                        memberships: Group::TEST_ENEMY_SENSOR,
+                        filters: Group::ALL & !Group::TEST_ENEMY & !Group::TEST_ENEMY_SENSOR
+                    },                
+                    active_physics_events: ActiveEvents::COLLISION_EVENTS,
+                    collides_with: ActiveCollisionTypes::all(),
+            })).observe(test_enemy_handlers::self_player_colision);
+        
         })
+        // .observe(test_enemy_handlers::self_player_colision)
         .remove::<Promise<TestEnemy>>();
 }
 
 
-pub mod test_enemy_handlers {
+mod test_enemy_handlers {
     use bevy::{log::info, prelude::{Commands, DespawnRecursiveExt, Parent, Query, Res, Trigger}};
     use crate::player::{Player, PlayerCollision};
 
     pub fn sensor_player_collision_handler(
         trigger: Trigger<PlayerCollision>,
-    mut commands: Commands,
-    parent_ref_query: Query<&Parent>,
-) {
+        mut commands: Commands,
+        parent_ref_query: Query<&Parent>,
+    ) {
         let parent = parent_ref_query
             .get(trigger.entity())
             .expect("The sensor of TestEnemy that collided should be a child of the actual TestEnemy entity!")
             .get();
         commands.entity(parent).despawn_recursive();
+    }
+
+    // doesn't get called!?
+    pub fn self_player_colision(
+        _trigger: Trigger<PlayerCollision>,
+        mut commands: Commands,
+        player: Res<Player>,
+        // damage query
+    ) {
+        info!("Player died!");
+        commands.entity(player.entity()).despawn_recursive();
     }
 }
 

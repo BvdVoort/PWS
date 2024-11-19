@@ -1,4 +1,5 @@
 mod test_enemy;
+mod entity_bundles;
 
 use test_enemy::TestEnemyPlugin;
 use bevy::app::Plugin;

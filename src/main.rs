@@ -5,6 +5,7 @@ mod physics;
 mod game_flow;
 mod font_handing;
 mod enemies;
+mod collision;
 
 use bevy::{app::{App, Startup, Update}, asset::AssetServer, math::Vec3, prelude::{AppExtStates, Camera, Camera2dBundle, Commands, OnEnter, OnExit, Query, Res, ResMut, Transform, With}, utils::default, DefaultPlugins};
 use bevy_ecs_ldtk::{LdtkPlugin, LdtkWorldBundle, LevelSelection};
@@ -34,8 +35,8 @@ pub fn main() {
         .insert_resource(LevelSelection::index(0))
 
         .add_plugins(FontPlugin)
-        .add_systems(OnEnter(GameState::Defeated), spawn_defeat_text)
-        .add_systems(OnEnter(GameState::Completed), spawn_complete_text)
+        .add_systems(OnEnter(GameState::Defeated), spawn_defeat_text) // should be a defeated event
+        .add_systems(OnEnter(GameState::Completed), spawn_complete_text) // should be a completed event
         
         .add_plugins(enemies::EnemyPlugin)
 
