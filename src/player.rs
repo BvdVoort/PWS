@@ -2,15 +2,15 @@ use std::default;
 
 use bevy::{
     app::{Plugin, PreStartup, Update}, ecs::{component::ComponentId, world::DeferredWorld}, input::{ButtonInput, InputPlugin}, math::Vec2, prelude::{
-        default, in_state, Bundle, Entity, IntoSystemConfigs, KeyCode, Query, Res, Resource, World 
+        default, in_state, resource_exists, Bundle, Commands, Entity, Event, EventReader, IntoSystemConfigs, KeyCode, Query, Res, Resource, World 
     }
 };
 use bevy_ecs_ldtk::{
     app::LdtkEntityAppExt, LdtkEntity, LdtkSpriteSheetBundle
 };
-use bevy_rapier2d::prelude::{
-    ActiveCollisionTypes, ActiveEvents, CharacterLength, Collider, KinematicCharacterController, KinematicCharacterControllerOutput, Velocity 
-};
+use bevy_rapier2d::{prelude::{
+    ActiveEvents, CharacterLength, Collider, CollisionEvent, ContactForceEvent, KinematicCharacterController, Velocity
+}, rapier::prelude::CollisionEventFlags};
 use crate::{
     game_flow::GameState,
     unsorted::Id,
@@ -47,6 +47,7 @@ impl Plugin for PlayerPlugin
         
         app
             .register_ldtk_entity::<PlayerBundle>("Player")    
+            .add_systems(Update, player_collision_handler.run_if(resource_exists::<Player>))
             .add_systems(Update, player_movement.run_if(in_state(GameState::Playing)))
             .add_systems(PreStartup, |world: &mut World| {
                 world
@@ -71,6 +72,24 @@ fn process_player_promise(mut world: DeferredWorld, entity: Entity, _component_i
         }
     ));
     entity_commands.remove::<Promise<Player>>();
+}
+
+#[derive(Event)]
+pub struct PlayerCollision;
+
+pub fn player_collision_handler(
+    mut collision_events: EventReader<CollisionEvent>,
+    mut commands: Commands,
+    player: Res<Player>,
+) {
+    let player_entity = player.entity();
+    for collision in collision_events.read() {
+        let CollisionEvent::Started(entity_1, entity_2, CollisionEventFlags::SENSOR) = collision else { continue };
+        commands.trigger_targets(PlayerCollision, {
+            if player_entity == *entity_1 { *entity_2 } else 
+            if player_entity == *entity_2 { *entity_1 } else { continue; /*No player collision*/ }
+        });
+    }
 }
 
 const GRAVITY: f32 = 0.1;

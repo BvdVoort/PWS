@@ -1,9 +1,9 @@
-use bevy::{app::{Plugin, PreStartup, Update}, ecs::{component::ComponentId, query, world::DeferredWorld}, log::info, prelude::{in_state, resource_exists, BuildChildren, Bundle, Commands, Component, DespawnRecursiveExt, Entity, EventReader, IntoSystemConfigs, Local, NextState, Parent, Query, Res, ResMut, SpatialBundle, With, World}};
+use bevy::{app::{Plugin, PreStartup, Update}, ecs::{component::ComponentId, world::DeferredWorld}, prelude::{in_state, BuildChildren, Bundle, Component, Entity, IntoSystemConfigs, Local, NextState, Query, ResMut, SpatialBundle, With, World}};
 use bevy_ecs_ldtk::{app::LdtkEntityAppExt, LdtkEntity};
-use bevy_rapier2d::{prelude::{ActiveCollisionTypes, ActiveEvents, Collider, CollisionEvent, Sensor}, rapier::prelude::CollisionEventFlags};
+use bevy_rapier2d::prelude::{ActiveCollisionTypes, ActiveEvents, Collider, CollisionGroups, Group, Sensor};
 
-use crate::{enemies, game_flow::GameState, player::Player, unsorted::Promise};
-
+use crate::{collision::LocalGroupNames, game_flow::GameState, unsorted::Promise};
+use super::entity_bundle::ObservableCollider;
 
 #[derive(Default, Bundle, LdtkEntity)]
 struct TestEnemyBundle {
@@ -15,6 +15,10 @@ struct TestEnemyBundle {
 
 #[derive(Default, Component)]
 struct TestEnemy;
+impl TestEnemy {
+    const CORNER_RADIUS: f32 = 3.0;
+    const HALF_CAPSULE_HEIGHT: f32 = 4.0;
+}
 
 pub struct TestEnemyPlugin;
 impl Plugin for TestEnemyPlugin
@@ -27,7 +31,6 @@ impl Plugin for TestEnemyPlugin
                     .register_component_hooks::<Promise<TestEnemy>>()
                     .on_add(process_test_enemy_promise);
             })
-            .add_systems(Update, test_enemy_killing.run_if(in_state(GameState::Playing)).run_if(resource_exists::<Player>))
             .add_systems(Update, handle_completion.run_if(in_state(GameState::Playing)).run_if(all_enemies_dead))
             ;
     }
@@ -36,44 +39,64 @@ impl Plugin for TestEnemyPlugin
 // impl a new Promise trait for TestEnemy {} // to make it more secure??
 fn process_test_enemy_promise(mut world: DeferredWorld, entity: Entity, _component_id: ComponentId) {
     world.commands().entity(entity)
-        .insert((Collider::capsule_y(4., 3.), TestEnemy))
+        .insert((
+            TestEnemy, 
+            ObservableCollider {
+                collider: Collider::capsule_y(TestEnemy::HALF_CAPSULE_HEIGHT, TestEnemy::CORNER_RADIUS),
+                collision_groups: CollisionGroups {
+                    memberships: Group::TEST_ENEMY,
+                    filters: Group::ALL & !Group::TEST_ENEMY_SENSOR
+                },
+                active_physics_events: ActiveEvents::all(),
+                collides_with: ActiveCollisionTypes::all()
+            },
+        ))
+        .observe(test_enemy_handlers::self_player_colision)
         .with_children(|childeren| {
             let mut spatial_bundle = SpatialBundle::default();
-            spatial_bundle.transform.translation.y = 5.;
+            spatial_bundle.transform.translation.y = TestEnemy::HALF_CAPSULE_HEIGHT * 1.1;
             childeren.spawn((
-                Collider::ball(3.), Sensor,
-                ActiveEvents::COLLISION_EVENTS,
-                ActiveCollisionTypes::all(),
                 spatial_bundle,
-            ));
+                Sensor, 
+                ObservableCollider {
+                    collider: Collider::ball(TestEnemy::CORNER_RADIUS), 
+                    collision_groups: CollisionGroups {
+                        memberships: Group::TEST_ENEMY_SENSOR,
+                        filters: Group::ALL & !Group::TEST_ENEMY,
+                    },                     
+                    active_physics_events: ActiveEvents::COLLISION_EVENTS,
+                    collides_with: ActiveCollisionTypes::all(),
+                }
+            ))
+            .observe(test_enemy_handlers::sensor_player_collision_handler);
         })
         .remove::<Promise<TestEnemy>>();
 }
 
-// should also handle killing of player somewhere!
-pub fn test_enemy_killing(
-    mut collision_events: EventReader<CollisionEvent>,
-    player: Res<Player>,
+
+pub mod test_enemy_handlers {
+    use bevy::{log::info, prelude::{Commands, DespawnRecursiveExt, Parent, Query, Res, Trigger}};
+    use crate::player::{Player, PlayerCollision};
+
+    pub fn sensor_player_collision_handler(
+        trigger: Trigger<PlayerCollision>,
     mut commands: Commands,
     parent_ref_query: Query<&Parent>,
 ) {
-    let player_entity = player.entity();
-    for collision in collision_events.read() {
-        let CollisionEvent::Started(entity_1, entity_2, CollisionEventFlags::SENSOR) = collision else { continue };
-        let test_enemy_sensor = {
-            if player_entity == *entity_1 { *entity_2 } else 
-            if player_entity == *entity_2 { *entity_1 } else { continue; /*No player collision (e.g. the collider of the TestEnemy)*/ }
-        };
-        let parent = parent_ref_query.get(test_enemy_sensor).expect("The sensor of TestEnemy that collided should be a child of the actual TestEnemy entity!");
-        commands.entity(parent.get()).despawn_recursive();
+        let parent = parent_ref_query
+            .get(trigger.entity())
+            .expect("The sensor of TestEnemy that collided should be a child of the actual TestEnemy entity!")
+            .get();
+        commands.entity(parent).despawn_recursive();
     }
 }
+
+
 
 fn all_enemies_dead(enemies: Query<(), With<TestEnemy>>, mut enemies_spawned_param: Local<bool>) -> bool
 {
     let enemies_spawned = enemies_spawned_param.clone();
-    if enemies_spawned { enemies.is_empty() }
-    else {
+    if enemies_spawned { enemies.is_empty() } else {
         *enemies_spawned_param = !enemies.is_empty();
         return false;
     }
