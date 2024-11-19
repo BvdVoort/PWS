@@ -53,7 +53,7 @@ fn process_test_enemy_promise(mut world: DeferredWorld, entity: Entity, _compone
         ))
         .with_children(|childeren| {
             let mut spatial_bundle = SpatialBundle::default();
-            spatial_bundle.transform.translation.y = TestEnemy::HALF_CAPSULE_HEIGHT * 1.2;
+            spatial_bundle.transform.translation.y = TestEnemy::HALF_CAPSULE_HEIGHT * 1.3;
             childeren.spawn((
                 spatial_bundle,
                 Sensor, 
