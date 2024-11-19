@@ -6,6 +6,7 @@ mod game_flow;
 mod font_handing;
 mod enemies;
 mod collision;
+mod finish;
 
 use bevy::{app::{App, Startup, Update}, asset::AssetServer, math::Vec3, prelude::{AppExtStates, Camera, Camera2dBundle, Commands, OnEnter, OnExit, Query, Res, ResMut, Transform, With}, utils::default, DefaultPlugins};
 use bevy_ecs_ldtk::{LdtkPlugin, LdtkWorldBundle, LevelSelection};
@@ -39,6 +40,8 @@ pub fn main() {
         .add_systems(OnEnter(GameState::Completed), spawn_complete_text) // should be a completed event
         
         .add_plugins(enemies::EnemyPlugin)
+
+        .add_plugins(finish::FinishPlugin)
 
         // temp
         .add_systems(Update, kill_or_complete_on_keypress)
