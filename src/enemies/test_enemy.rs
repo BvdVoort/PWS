@@ -55,26 +55,17 @@ pub fn test_enemy_killing(
     mut collision_events: EventReader<CollisionEvent>,
     player: Res<Player>,
     mut commands: Commands,
-    child_query: Query<&Parent>,
+    parent_ref_query: Query<&Parent>,
 ) {
     let player_entity = player.entity();
-    // let player_entity = Entity::PLACEHOLDER;
     for collision in collision_events.read() {
-        // info!("{collision:?}");
         let CollisionEvent::Started(entity_1, entity_2, CollisionEventFlags::SENSOR) = collision else { continue };
-        let other = {
-            if player_entity == *entity_1 { *entity_2 }
-            else if player_entity == *entity_2 { *entity_1 }
-            else { continue; }
+        let test_enemy_sensor = {
+            if player_entity == *entity_1 { *entity_2 } else 
+            if player_entity == *entity_2 { *entity_1 } else { continue; /*No player collision (e.g. the collider of the TestEnemy)*/ }
         };
-        if let Ok(parent) = child_query.get(other) {
-            commands.entity(parent.get()).despawn_recursive();
-        }
-        else {
-            commands.entity(other).despawn_recursive();
-        }
-        // info!("{collision:?}. With: {other}");
-        
+        let parent = parent_ref_query.get(test_enemy_sensor).expect("The sensor of TestEnemy that collided should be a child of the actual TestEnemy entity!");
+        commands.entity(parent.get()).despawn_recursive();
     }
 }
 
