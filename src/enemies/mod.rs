@@ -4,7 +4,8 @@ mod entity_bundles;
 use test_enemy::TestEnemyPlugin;
 use bevy::app::Plugin;
 
-pub use entity_bundles::ObservableCollider;
+pub use entity_bundles::ObservableColliderBundle;
+pub use entity_bundles::ColliderBundle;
 
 pub struct EnemyPlugin;
 impl Plugin for EnemyPlugin {

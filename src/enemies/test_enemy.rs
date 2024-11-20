@@ -1,11 +1,9 @@
-use std::str;
-
-use bevy::{app::{Plugin, PreStartup, Update}, ecs::{component::ComponentId, world::DeferredWorld}, prelude::{in_state, BuildChildren, Bundle, Component, Entity, Event, EventReader, IntoSystemConfigs, Local, NextState, Query, ResMut, SpatialBundle, With, World}};
+use bevy::{app::{Plugin, PreStartup, Update}, ecs::{component::ComponentId, world::DeferredWorld}, prelude::{in_state, BuildChildren, Bundle, Component, Entity, IntoSystemConfigs, Local, NextState, Query, ResMut, SpatialBundle, With, World}};
 use bevy_ecs_ldtk::{app::LdtkEntityAppExt, LdtkEntity};
-use bevy_rapier2d::prelude::{ActiveCollisionTypes, ActiveEvents, Collider, CollisionEvent, CollisionGroups, Group, Sensor};
+use bevy_rapier2d::prelude::{Collider, CollisionGroups, Group};
 
-use crate::{collision::LocalGroupNames, game_flow::GameState, unsorted::Promise};
-use super::entity_bundles::ObservableCollider;
+use crate::{collision::LocalGroupNames, game_flow::GameState, unsorted::{Promise, PromiseProcedure}};
+use super::{ColliderBundle, ObservableColliderBundle};
 
 #[derive(Default, Bundle, LdtkEntity)]
 struct TestEnemyBundle {
@@ -33,63 +31,60 @@ impl Plugin for TestEnemyPlugin
             .add_systems(PreStartup, |world: &mut World| {
                 world
                     .register_component_hooks::<Promise<TestEnemy>>()
-                    .on_add(process_test_enemy_promise);
+                    .on_add(TestEnemy::invoke);
             })
             .add_systems(Update, handle_completion.run_if(in_state(GameState::Playing)).run_if(all_enemies_dead))            
             ;
     }
 }
 
-// #? MAYBE: impl a new Promise trait for TestEnemy {} // to make it more secure??
 // #! TODO: Make a centrale obsever entity for all test enemies. 
-fn process_test_enemy_promise(mut world: DeferredWorld, entity: Entity, _component_id: ComponentId) {
-    world.commands().entity(entity)
-        .insert((
-            Collider::capsule_y(TestEnemy::HALF_CAPSULE_HEIGHT, TestEnemy::CORNER_RADIUS),
-            CollisionGroups {
-                memberships: Group::TEST_ENEMY,
-                filters: Group::ALL & !Group::TEST_ENEMY_SENSOR
-            },
-        ))
-        .with_children(|childeren| {
-            let mut spatial_bundle = SpatialBundle::default();
-            spatial_bundle.transform.translation.y = TestEnemy::HALF_CAPSULE_HEIGHT * 1.3;
-            childeren.spawn((
-                spatial_bundle,
-                Sensor, 
-                ObservableCollider {
-                    collider: Collider::ball(TestEnemy::CORNER_RADIUS), 
-                    collision_groups: CollisionGroups {
-                        memberships: Group::TEST_ENEMY_SENSOR,
-                        filters: Group::ALL & !Group::TEST_ENEMY & !Group::TEST_ENEMY_SENSOR,
-                    },                     
-                    active_physics_events: ActiveEvents::COLLISION_EVENTS,
-                    collides_with: ActiveCollisionTypes::all(),
-                }
-            )).observe(test_enemy_handlers::sensor_player_collision_handler);
+impl PromiseProcedure for TestEnemy {
+    fn invoke(mut world: DeferredWorld, entity: Entity, _component_id: ComponentId) {
+        world.commands().entity(entity)
+            .insert(
+                ColliderBundle {
+                collider: Collider::capsule_y(TestEnemy::HALF_CAPSULE_HEIGHT, TestEnemy::CORNER_RADIUS),
+                collision_groups: CollisionGroups {
+                    memberships: Group::TEST_ENEMY,
+                    filters: Group::ALL & !Group::TEST_ENEMY_SENSOR
+                },
+            })
+            .with_children(|childeren| {
+                let mut spatial_bundle = SpatialBundle::default();
+                spatial_bundle.transform.translation.y = TestEnemy::HALF_CAPSULE_HEIGHT * 1.3;
+                childeren.spawn((
+                    spatial_bundle,
+                    ObservableColliderBundle::from(ColliderBundle {
+                        collider: Collider::ball(TestEnemy::CORNER_RADIUS), 
+                        collision_groups: CollisionGroups {
+                            memberships: Group::TEST_ENEMY_SENSOR,
+                            filters: Group::ALL & !Group::TEST_ENEMY & !Group::TEST_ENEMY_SENSOR,
+                        },                     
+                    })
+                ))
+                .observe(test_enemy_handlers::sensor_player_collision_handler);
+                
+                childeren.spawn((
+                    SpatialBundle::default(),
+                    ObservableColliderBundle::from(ColliderBundle {
+                        collider: Collider::capsule_y(TestEnemy::HALF_CAPSULE_HEIGHT, TestEnemy::CORNER_RADIUS * 1.1),
+                        collision_groups: CollisionGroups {
+                            memberships: Group::TEST_ENEMY_SENSOR,
+                            filters: Group::ALL & !Group::TEST_ENEMY & !Group::TEST_ENEMY_SENSOR
+                        },                
+                    })
+                ))
+                .observe(test_enemy_handlers::self_player_colision);
             
-            childeren.spawn((
-                SpatialBundle::default(),
-                Sensor,
-                ObservableCollider {
-                    collider: Collider::capsule_y(TestEnemy::HALF_CAPSULE_HEIGHT, TestEnemy::CORNER_RADIUS * 1.1),
-                    collision_groups: CollisionGroups {
-                        memberships: Group::TEST_ENEMY_SENSOR,
-                        filters: Group::ALL & !Group::TEST_ENEMY & !Group::TEST_ENEMY_SENSOR
-                    },                
-                    active_physics_events: ActiveEvents::COLLISION_EVENTS,
-                    collides_with: ActiveCollisionTypes::all(),
-            })).observe(test_enemy_handlers::self_player_colision);
-        
-        })
-        // .observe(test_enemy_handlers::self_player_colision)
-        .remove::<Promise<TestEnemy>>();
+            })
+            .remove::<Promise<TestEnemy>>();
+    }
 }
-
 
 mod test_enemy_handlers {
     use bevy::prelude::{Commands, DespawnRecursiveExt, NextState, Parent, Query, Res, ResMut, Trigger};
-    use crate::{game_flow::GameState, player::{Player, PlayerCollision}};
+    use crate::{game_flow::GameState, player::{PlayerCollision, Player}, unsorted::Uid};
 
     pub fn sensor_player_collision_handler(
         trigger: Trigger<PlayerCollision>,
@@ -107,7 +102,7 @@ mod test_enemy_handlers {
     pub fn self_player_colision(
         _trigger: Trigger<PlayerCollision>,
         mut commands: Commands,
-        player: Res<Player>,
+        player: Res<Uid<Player>>,
         mut next_state: ResMut<NextState<GameState>>,
         // damage query
     ) {

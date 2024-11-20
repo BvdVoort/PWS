@@ -1,12 +1,12 @@
 mod unsorted;
 mod debug;
-mod player;
 mod physics;
 mod game_flow;
 mod font_handing;
 mod enemies;
 mod collision;
 mod finish;
+mod player;
 
 use bevy::{app::{App, Startup, Update}, asset::AssetServer, math::Vec3, prelude::{AppExtStates, Camera, Camera2dBundle, Commands, OnEnter, OnExit, Query, Res, ResMut, Transform, With}, utils::default, DefaultPlugins};
 use bevy_ecs_ldtk::{LdtkPlugin, LdtkWorldBundle, LevelSelection};
@@ -28,7 +28,7 @@ pub fn main() {
         .init_state::<game_flow::GameState>()
 
         .add_plugins(LdtkPlugin)
-        .add_plugins(RapierPhysicsPlugin::<NoUserData>::pixels_per_meter(10000.))
+        .add_plugins(RapierPhysicsPlugin::<NoUserData>::pixels_per_meter(1.))
         .add_plugins(PlayerPlugin)
         .add_plugins(LDTKEnumTagPluginCustom)
 

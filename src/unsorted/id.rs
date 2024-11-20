@@ -1,7 +1,7 @@
-use bevy::{prelude::{Component, Entity}, reflect::Reflect};
+use bevy::{prelude::{Component, Entity, Resource}, reflect::Reflect};
 use std::marker::PhantomData;
 
-// maybe this shouldn't excist
+
 #[derive(Component, Reflect, Clone, Copy)]
 pub struct Id<T>(Entity, #[reflect(ignore)] PhantomData<T>);
 impl<T> From<Entity> for Id<T>
@@ -26,11 +26,3 @@ impl<T> From<Id<T>> for Entity
         value.entity()
     }
 }
-
-// #! should this be implemented or not?
-// impl<T> Default for Id<T>
-// {
-//     fn default() -> Self {
-//         Self(Entity::PLACEHOLDER, PhantomData)
-//     }
-// }
