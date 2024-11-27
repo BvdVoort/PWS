@@ -2,7 +2,7 @@ use std::{ops::Mul, time::Duration};
 
 use bevy::{app::{Plugin, PreUpdate, Startup, Update}, ecs::query, log::info, math::Vec2, prelude::{Bundle, Commands, Component, GamepadButtonType, KeyCode, Local, Query, Res}, reflect::Reflect, time::{Stopwatch, Time}, utils::default};
 use bevy_ecs_ldtk::LdtkEntity;
-use bevy_rapier2d::{plugin::RapierConfiguration, prelude::{ActiveCollisionTypes, ActiveEvents, Collider, KinematicCharacterController, KinematicCharacterControllerOutput, Velocity}};
+use bevy_rapier2d::{plugin::RapierConfiguration, prelude::{ActiveCollisionTypes, ActiveEvents, Collider, GravityScale, KinematicCharacterController, KinematicCharacterControllerOutput, Velocity}};
 use leafwing_input_manager::{plugin::InputManagerPlugin, prelude::{ActionState, GamepadControlAxis, InputMap, KeyboardVirtualAxis, WithAxisProcessingPipelineExt}, Actionlike, InputManagerBundle};
 
 use crate::unsorted::{Promise, PromiseProcedure, BevyPromiseResolver};
@@ -62,20 +62,21 @@ impl PromiseProcedure for Player {
                 ActiveCollisionTypes::all(),
                 JumpTracker::default(),
                 Velocity::default(),
+                GravityScale::default(),
             ));
         world.commands().entity(entity).remove_by_id(component_id);
     }
 }
 
 const MOVEMENT_SCALER: f32 = 200.0;
-const TEMP_GRAVITY_SCALER: f32 = 20.0;
+const TEMP_GRAVITY_SCALER: f32 = 55.0;
 
 fn player_movement(
     time: Res<Time>,
     rapier_config: Res<RapierConfiguration>,
-    mut query: Query<(&ActionState<InputAction>, &mut JumpTracker, &mut KinematicCharacterController, &mut Velocity)>,
+    mut query: Query<(&ActionState<InputAction>, &mut JumpTracker, &mut KinematicCharacterController, &mut Velocity, &mut GravityScale)>,
 ) {
-    for (action, mut jump, mut controller, mut velocity) in query.iter_mut() {
+    for (action, mut jump, mut controller, mut velocity, mut gravity_scale) in query.iter_mut() {
         let horizontal_movement = action
             .axis_data(&InputAction::Move)
             .unwrap_or(&default())
@@ -83,12 +84,16 @@ fn player_movement(
             .mul(MOVEMENT_SCALER) 
             .mul(time.delta_seconds());
 
-        if action.just_pressed(&InputAction::Jump) {
+        if action.pressed(&InputAction::Jump) {
             jump.try_jump(|| {
                 *velocity = Velocity::linear(Vec2::Y * 100.0);        
+                gravity_scale.0 = 0.4;
             });
+        } 
+        else {
+            gravity_scale.0 = 1.0;
         }
-        *velocity = Velocity::linear(rapier_config.gravity * time.delta_seconds() * TEMP_GRAVITY_SCALER + velocity.linvel);
+        *velocity = Velocity::linear(rapier_config.gravity * gravity_scale.0 * time.delta_seconds() * TEMP_GRAVITY_SCALER + velocity.linvel);
         controller.translation = Some(Vec2::new(horizontal_movement, velocity.linvel.y * time.delta_seconds()))
     }
 }
