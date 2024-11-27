@@ -1,34 +1,27 @@
 mod option_add_assign;
+mod scalar;
 mod velocity;
 mod acceleration;
 mod gravity;
 mod walk;
 mod jump;
-mod scheldules;
+mod distance;
 
 use acceleration::{apply_acceleration, reset_acceleration};
 use gravity::apply_gravity_to_character;
-use jump::apply_jump_acceleration;
+use jump::JumpPlugin;
 use velocity::apply_velocity;
-// use scheldules::PlayerPhysicsCalculate;
 
-use bevy::{app::{First, MainScheduleOrder, Plugin, PostUpdate}, prelude::{IntoSystemConfigs, IntoSystemSetConfigs, SystemSet}};
+use bevy::{app::{First, Plugin, PostUpdate, Update}, math::{Vec2, VectorSpace}, prelude::{IntoSystemConfigs, Query}};
+use bevy_rapier2d::{parry::query, prelude::{KinematicCharacterControllerOutput, PhysicsSet::StepSimulation}};
+use bevy_rapier2d::prelude::PhysicsSet;
 
-
-#[allow(unused_imports)] pub use velocity::Velocity;
-#[allow(unused_imports)] pub use acceleration::Acceleration;
-#[allow(unused_imports)] pub use scheldules::PlayerPhysicsConfigure;
 use walk::apply_walk_movement;
 
-#[derive(SystemSet, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug, Default, Hash)]
-struct PlayerPhysicsForceSetter;
-
-#[derive(SystemSet, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug, Default, Hash)]
-struct PlayerPhysicsReset;
-
-#[derive(SystemSet, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug, Default, Hash)]
-struct PlayerPhysicsCalculate;
-
+#[allow(unused_imports)] pub use scalar::Scaler;
+#[allow(unused_imports)] pub use velocity::Velocity;
+#[allow(unused_imports)] pub use acceleration::Acceleration;
+#[allow(unused_imports)] pub use jump::JumpForce;
 
 pub struct PlayerPhysicsPlugin;
 impl Plugin for PlayerPhysicsPlugin {
@@ -36,18 +29,32 @@ impl Plugin for PlayerPhysicsPlugin {
         app
             .register_type::<Acceleration>()
             .register_type::<Velocity>()
-            .configure_sets(First, (
-                PlayerPhysicsReset.before(PlayerPhysicsForceSetter),
-                PlayerPhysicsForceSetter.before(PlayerPhysicsCalculate),
-                PlayerPhysicsCalculate
+            .add_plugins(JumpPlugin)
+            .add_systems(PostUpdate, (
+                (
+                    apply_acceleration,
+                    apply_velocity,
+                )
+                .chain()
+                .in_set(StepSimulation), 
+                (
+                    reset_acceleration, // should be reset force but force isnt yet implemented!
+                )
+                .in_set(PhysicsSet::Writeback),    
             ))
-            .add_systems(First, reset_acceleration.in_set(PlayerPhysicsReset))
-            .add_systems(First, apply_velocity.after(apply_acceleration).in_set(PlayerPhysicsCalculate))
-            .add_systems(First, apply_acceleration.before(apply_velocity).in_set(PlayerPhysicsCalculate))
-            .add_systems(PlayerPhysicsConfigure, (
+            .add_systems(First, |mut query: Query<(&KinematicCharacterControllerOutput, &mut Velocity)>|{
+                for (output, mut physics) in query.iter_mut() {
+                    match output.desired_translation - output.effective_translation {
+                        Vec2 { x: 0., y: 0. } => return,
+                        Vec2 { x: 0., .. } => physics.linear.x = 0.,
+                        Vec2 { y: 0., .. } => physics.linear.y = 0.,
+                        _ => physics.linear = Vec2::ZERO,
+                    }
+                }
+            })
+            .add_systems(Update, (
                 apply_gravity_to_character,
                 apply_walk_movement,
-                apply_jump_acceleration
             ))
             ;
     }

@@ -1,4 +1,5 @@
-use bevy::{app::{App, PreStartup}, ecs::{component::ComponentId, world::DeferredWorld}, prelude::{Component, Entity, World}};
+use bevy::{app::{App, PreStartup}, ecs::{component::ComponentId, world::DeferredWorld}, prelude::{Bundle, Component, Entity, World}};
+use bevy_ecs_ldtk::{app::LdtkEntityAppExt, prelude::LdtkEntity};
 use std::marker::PhantomData;
 
 /// [Component] that promises further procesing of an [entity].
@@ -10,7 +11,8 @@ use std::marker::PhantomData;
 /// [component]: Component
 /// [phantomdata]: PhantomData
 /// 
-#[derive(Component)]
+#[derive(Component, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[component(storage = "SparseSet")]
 pub struct Promise<T: PromiseProcedure>(PhantomData<T>);
 
 impl<T: PromiseProcedure> Default for Promise<T> {
@@ -20,21 +22,33 @@ impl<T: PromiseProcedure> Default for Promise<T> {
 }
 
 pub trait PromiseProcedure {
-    fn invoke<'w>(world: DeferredWorld<'w>, entity: Entity, component_id: ComponentId);
+    fn resolve_promise<'w>(world: DeferredWorld<'w>, entity: Entity, component_id: ComponentId);
+}
+trait BevyOnly {}
+#[allow(private_bounds)]
+pub trait BevyPromiseResolver: BevyOnly {
+    #[allow(dead_code)]
+    fn register_promise<P: PromiseProcedure + Sync + Send + 'static>(&mut self) -> &mut Self;
+    
+    #[allow(dead_code)]
+    fn register_ldtk_entity_with_promise<P: LdtkEntity + Bundle + PromiseProcedure + Sync + Send + 'static>(&mut self, entity_identifier: &str) -> &mut Self;
 }
 
-// #! TODO: fix the promise resolver
-// pub trait BevyPromiseResolver {
-//     fn register_promise<T: PromiseProcedure + Send + Sync>(app: &mut self) -> &mut Self;
-// }
+impl BevyOnly for App {}
+impl BevyPromiseResolver for App {
+    fn register_promise<P: PromiseProcedure + Sync + Send + 'static>(&mut self) -> &mut App {
+        self.add_systems(PreStartup, |world: &mut World| { 
+            world
+                .register_component_hooks::<Promise<P>>()
+                .on_add(P::resolve_promise);
+            }
+        );
+        self
+    }
     
-// impl BevyPromiseResolver for App {
-//     fn register_promise<T: PromiseProcedure + Send + Sync>(app: &mut self) {
-//         app.add_systems(PreStartup, |world: &mut World| { 
-//             world
-//                 .register_component_hooks::<Promise<T>>()
-//                 .on_add(T::invoke);
-//             }
-//         );
-//     }
-// }
+    fn register_ldtk_entity_with_promise<P: LdtkEntity + Bundle + PromiseProcedure + Sync + Send + 'static>(&mut self, entity_identifier: &str) -> &mut Self {
+        self
+            .register_ldtk_entity::<P>(entity_identifier)
+            .register_promise::<P>()
+    }
+}

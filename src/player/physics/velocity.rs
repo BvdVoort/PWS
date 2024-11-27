@@ -1,19 +1,19 @@
-use std::ops::{Add, AddAssign, Sub, SubAssign};
+use std::{ops::{Add, AddAssign, Div, Mul, Sub, SubAssign}, time::Duration};
 
-use bevy::{math::Vec2, prelude::{Component, Query}, reflect::Reflect};
+use bevy::{math::Vec2, prelude::{Component, Query, Res}, reflect::Reflect, time::Time};
 use bevy_rapier2d::prelude::KinematicCharacterController;
 
-use super::option_add_assign::OptionAddAssignExtension;
+use super::{option_add_assign::OptionAddAssignExtension, Scaler};
 
 
-#[derive(Component, Reflect, Default, Clone, Copy, PartialEq)]
+#[derive(Component, Reflect, Debug, Default, Clone, Copy, PartialEq)]
 pub struct Velocity {
     pub linear: Vec2
 }
 
-pub fn apply_velocity(mut query: Query<(&mut KinematicCharacterController, &Velocity)>) {
+pub fn apply_velocity(time: Res<Time>, mut query: Query<(&mut KinematicCharacterController, &Velocity)>) {
     for (mut controller, velocity) in query.iter_mut() {
-        controller.translation.add_assign(velocity.linear); 
+        OptionAddAssignExtension::add_assign(&mut controller.translation, *velocity * time.delta()); 
     }
 }
 
@@ -50,5 +50,60 @@ impl Sub for Velocity {
 impl SubAssign for Velocity {
     fn sub_assign(&mut self, rhs: Self) {
         self.linear -= rhs.linear;
+    }
+}
+
+
+impl<T> Mul<T> for Velocity 
+where 
+    Vec2: Mul<T, Output = Vec2>,
+    T: Scaler,
+{
+    type Output = Velocity;
+
+    fn mul(self, rhs: T) -> Self::Output {
+        Self::Output{ linear: self.linear * rhs }
+    }
+}
+
+impl Mul<Velocity> for f32 {
+    type Output = Velocity;
+
+    fn mul(self, rhs: Velocity) -> Self::Output {rhs * self}
+}
+
+impl<T> Div<T> for Velocity 
+where
+    Vec2: Div<T, Output = Vec2>,
+    T: Scaler,
+{
+    type Output = Velocity;
+    
+    fn div(self, rhs: T) -> Self::Output {
+        Self::Output{ linear: self.linear / rhs }
+    }
+}
+
+impl Div<Velocity> for f32
+{
+    type Output = Velocity;
+    
+    fn div(self, rhs: Velocity) -> Self::Output {rhs / self}
+}
+
+// #! TODO: make a distance type
+impl Mul<Duration> for Velocity {
+    type Output = Vec2;
+
+    fn mul(self, rhs: Duration) -> Self::Output {
+        self.linear * rhs.as_secs_f32()
+    }
+}
+
+impl Mul<Velocity> for Duration {
+    type Output = Vec2;
+
+    fn mul(self, rhs: Velocity) -> Self::Output {
+        rhs * self
     }
 }

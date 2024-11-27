@@ -21,7 +21,7 @@ impl Plugin for FinishPlugin
             .add_systems(PreStartup, |world: &mut World| { 
                 world
                     .register_component_hooks::<Promise<Finish>>()
-                    .on_add(Finish::invoke);
+                    .on_add(Finish::resolve_promise);
                 }
             );
     }
@@ -29,7 +29,7 @@ impl Plugin for FinishPlugin
 
 struct Finish;
 impl PromiseProcedure for Finish {
-    fn invoke(mut world: DeferredWorld, entity: Entity, _component_id: ComponentId) {
+    fn resolve_promise(mut world: DeferredWorld, entity: Entity, _component_id: ComponentId) {
         world
             .commands()
             .entity(entity)

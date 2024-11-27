@@ -1,8 +1,8 @@
-use bevy::{app::{Plugin, PreStartup, Update}, ecs::{component::ComponentId, world::DeferredWorld}, prelude::{in_state, BuildChildren, Bundle, Component, Entity, IntoSystemConfigs, Local, NextState, Query, ResMut, SpatialBundle, With, World}};
+use bevy::{app::{Plugin, Update}, ecs::{component::ComponentId, world::DeferredWorld}, prelude::{in_state, BuildChildren, Bundle, Component, Entity, IntoSystemConfigs, Local, NextState, Query, ResMut, SpatialBundle, With}};
 use bevy_ecs_ldtk::{app::LdtkEntityAppExt, LdtkEntity};
 use bevy_rapier2d::prelude::{Collider, CollisionGroups, Group};
 
-use crate::{collision::LocalGroupNames, game_flow::GameState, unsorted::{Promise, PromiseProcedure}};
+use crate::{collision::LocalGroupNames, game_flow::GameState, unsorted::{BevyPromiseResolver, Promise, PromiseProcedure}};
 use super::{ColliderBundle, ObservableColliderBundle};
 
 #[derive(Default, Bundle, LdtkEntity)]
@@ -28,11 +28,7 @@ impl Plugin for TestEnemyPlugin
     fn build(&self, app: &mut bevy::prelude::App) {
         app
             .register_ldtk_entity::<TestEnemyBundle>("Mob")    
-            .add_systems(PreStartup, |world: &mut World| {
-                world
-                    .register_component_hooks::<Promise<TestEnemy>>()
-                    .on_add(TestEnemy::invoke);
-            })
+            .register_promise::<TestEnemy>()
             .add_systems(Update, handle_completion.run_if(in_state(GameState::Playing)).run_if(all_enemies_dead))            
             ;
     }
@@ -40,7 +36,7 @@ impl Plugin for TestEnemyPlugin
 
 // #! TODO: Make a centrale obsever entity for all test enemies. 
 impl PromiseProcedure for TestEnemy {
-    fn invoke(mut world: DeferredWorld, entity: Entity, _component_id: ComponentId) {
+    fn resolve_promise(mut world: DeferredWorld, entity: Entity, _component_id: ComponentId) {
         world.commands().entity(entity)
             .insert(
                 ColliderBundle {

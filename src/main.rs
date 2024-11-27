@@ -1,20 +1,22 @@
 mod unsorted;
 mod debug;
-mod physics;
 mod game_flow;
 mod font_handing;
 mod enemies;
 mod collision;
 mod finish;
 mod player;
+mod custom_character_controller;
+mod character;
 
-use bevy::{app::{App, Startup, Update}, asset::AssetServer, math::Vec3, prelude::{AppExtStates, Camera, Camera2dBundle, Commands, OnEnter, OnExit, Query, Res, ResMut, Transform, With}, utils::default, DefaultPlugins};
+use bevy::{app::{App, PreStartup, Startup, Update}, asset::AssetServer, math::{Vec2, Vec3}, prelude::{AppExtStates, Camera, Camera2dBundle, Commands, OnEnter, OnExit, Query, Res, ResMut, Transform, With}, utils::default, DefaultPlugins};
 use bevy_ecs_ldtk::{LdtkPlugin, LdtkWorldBundle, LevelSelection};
 use bevy_inspector_egui::quick::WorldInspectorPlugin;
-use bevy_rapier2d::{plugin::{NoUserData, RapierPhysicsPlugin}, render::RapierDebugRenderPlugin};
+use bevy_rapier2d::{plugin::{NoUserData, RapierConfiguration, RapierPhysicsPlugin}, render::RapierDebugRenderPlugin};
 use font_handing::{FontHandles, FontPlugin};
 use game_flow::GameState;
 use player::PlayerPlugin;
+use character::CharacterPlugin;
 use unsorted::LDTKEnumTagPluginCustom;
 
 use unsorted::ldtk_level_handler;
@@ -25,19 +27,23 @@ pub fn main() {
     
     app
         .add_plugins(DefaultPlugins)
-        .init_state::<game_flow::GameState>()
+        .init_state::<GameState>()         
 
         .add_plugins(LdtkPlugin)
-        .add_plugins(RapierPhysicsPlugin::<NoUserData>::pixels_per_meter(1.))
-        .add_plugins(PlayerPlugin)
+        .add_plugins(RapierPhysicsPlugin::<NoUserData>::pixels_per_meter(16.))
+        // .add_plugins(PlayerPlugin)
+        // .add_plugins(custom_character_controller::CharacterControllerPlugin)
+        .add_plugins(CharacterPlugin)
         .add_plugins(LDTKEnumTagPluginCustom)
 
+        .add_systems(PreStartup, |mut rapier_config: ResMut<RapierConfiguration>| rapier_config.gravity = Vec2::NEG_Y * 5.)
+        
         .add_systems(Startup, setup)
         .insert_resource(LevelSelection::index(0))
-
+        
         .add_plugins(FontPlugin)
-        .add_systems(OnEnter(GameState::Defeated), spawn_defeat_text) // should be a defeated event
-        .add_systems(OnEnter(GameState::Completed), spawn_complete_text) // should be a completed event
+        .add_systems(OnEnter(GameState::Defeated), spawn_defeat_text)
+        .add_systems(OnEnter(GameState::Completed), spawn_complete_text)
         
         .add_plugins(enemies::EnemyPlugin)
 
@@ -102,7 +108,7 @@ fn spawn_defeat_text(
         ..default()
     };
 
-    let mut text = Text2dBundle {
+    let text = Text2dBundle {
         text: Text::from_section("You died!", text_style.clone()),
         ..default()
     };
