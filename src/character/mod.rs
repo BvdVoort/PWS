@@ -1,8 +1,8 @@
 use std::{ops::Mul, time::Duration};
 
-use bevy::{app::{Plugin, PreUpdate, Startup, Update}, ecs::query, log::info, math::Vec2, prelude::{Bundle, Commands, Component, GamepadButtonType, KeyCode, Local, Query, Res}, reflect::Reflect, time::{Stopwatch, Time}, utils::default};
+use bevy::{app::{Plugin, PreUpdate, Startup, Update}, ecs::query, math::Vec2, prelude::{Bundle, Commands, Component, Entity, Event, GamepadButtonType, KeyCode, Local, Query, Res}, reflect::Reflect, time::{Stopwatch, Time}, utils::{default, info}};
 use bevy_ecs_ldtk::LdtkEntity;
-use bevy_rapier2d::{plugin::RapierConfiguration, prelude::{ActiveCollisionTypes, ActiveEvents, Collider, GravityScale, KinematicCharacterController, KinematicCharacterControllerOutput, Velocity}};
+use bevy_rapier2d::{plugin::RapierConfiguration, prelude::{ActiveCollisionTypes, ActiveEvents, CharacterCollision, Collider, GravityScale, KinematicCharacterController, KinematicCharacterControllerOutput, Velocity}};
 use leafwing_input_manager::{plugin::InputManagerPlugin, prelude::{ActionState, GamepadControlAxis, InputMap, KeyboardVirtualAxis, WithAxisProcessingPipelineExt}, Actionlike, InputManagerBundle};
 
 use crate::unsorted::{Promise, PromiseProcedure, BevyPromiseResolver};
@@ -14,7 +14,7 @@ impl Plugin for CharacterPlugin {
             .register_ldtk_entity_with_promise::<Player>("Player")
             .add_plugins(InputManagerPlugin::<InputAction>::default())
             .add_systems(PreUpdate, player_sync_jump_tracker_and_grounded)
-            .add_systems(Update, player_movement)
+            .add_systems(Update, (player_movement, player_colision))
             ;
     }
 }
@@ -87,7 +87,7 @@ fn player_movement(
         if action.pressed(&InputAction::Jump) {
             jump.try_jump(|| {
                 *velocity = Velocity::linear(Vec2::Y * 100.0);        
-                gravity_scale.0 = 0.4;
+                gravity_scale.0 = 0.3;
             });
         } 
         else {
@@ -148,6 +148,26 @@ fn player_sync_jump_tracker_and_grounded(
             Jump::Impossible => if check.grounded { Jump::Possible } else { continue; },
             Jump::Started => if !check.grounded { Jump::Performing } else { continue; }, // #! NOTE: if jump won't get off the ground this wil fail!
             Jump::Possible => continue,
+        }
+    }
+}
+
+#[derive(Event)]
+pub struct CollidedWithCharacter(Entity);
+impl CollidedWithCharacter {
+    pub fn entity(&self) -> Entity { self.0 }
+}
+
+fn player_colision(
+    mut commands: Commands,
+    mut query: Query<(Entity, &KinematicCharacterControllerOutput)>
+) {
+    for (character_entity, controller_output) in query.iter_mut() {
+        for colision in controller_output.collisions.clone() {
+            if character_entity == colision.entity {
+                info("colision is characgter");
+            }
+            commands.trigger_targets(CollidedWithCharacter(character_entity), colision.entity); //let others handle damage etc
         }
     }
 }
