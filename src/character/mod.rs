@@ -2,7 +2,7 @@ use std::{ops::Mul, time::Duration};
 
 use bevy::{app::{Plugin, PreUpdate, Startup, Update}, ecs::query, math::Vec2, prelude::{Bundle, Commands, Component, Entity, Event, GamepadButtonType, KeyCode, Local, Query, Res}, reflect::Reflect, time::{Stopwatch, Time}, utils::{default, info}};
 use bevy_ecs_ldtk::LdtkEntity;
-use bevy_rapier2d::{plugin::RapierConfiguration, prelude::{ActiveCollisionTypes, ActiveEvents, CharacterCollision, Collider, GravityScale, KinematicCharacterController, KinematicCharacterControllerOutput, Velocity}};
+use bevy_rapier2d::{plugin::RapierConfiguration, prelude::{ActiveCollisionTypes, ActiveEvents, CharacterCollision, Collider, GravityScale, KinematicCharacterController, KinematicCharacterControllerOutput, ShapeCastHit, Velocity}};
 use leafwing_input_manager::{plugin::InputManagerPlugin, prelude::{ActionState, GamepadControlAxis, InputMap, KeyboardVirtualAxis, WithAxisProcessingPipelineExt}, Actionlike, InputManagerBundle};
 
 use crate::unsorted::{Promise, PromiseProcedure, BevyPromiseResolver};
@@ -14,7 +14,7 @@ impl Plugin for CharacterPlugin {
             .register_ldtk_entity_with_promise::<Player>("Player")
             .add_plugins(InputManagerPlugin::<InputAction>::default())
             .add_systems(PreUpdate, player_sync_jump_tracker_and_grounded)
-            .add_systems(Update, (player_movement, player_colision))
+            .add_systems(Update, (player_movement, character_colision))
             ;
     }
 }
@@ -152,22 +152,19 @@ fn player_sync_jump_tracker_and_grounded(
     }
 }
 
-#[derive(Event)]
-pub struct CollidedWithCharacter(Entity);
-impl CollidedWithCharacter {
-    pub fn entity(&self) -> Entity { self.0 }
+#[derive(Event, Debug)]
+pub struct CollidedWithCharacter{
+    pub hit: ShapeCastHit,
+    pub character: Entity
 }
 
-fn player_colision(
+fn character_colision(
     mut commands: Commands,
     mut query: Query<(Entity, &KinematicCharacterControllerOutput)>
 ) {
-    for (character_entity, controller_output) in query.iter_mut() {
+    for (entity, controller_output) in query.iter_mut() {
         for colision in controller_output.collisions.clone() {
-            if character_entity == colision.entity {
-                info("colision is characgter");
-            }
-            commands.trigger_targets(CollidedWithCharacter(character_entity), colision.entity); //let others handle damage etc
+            commands.trigger_targets(CollidedWithCharacter{ hit: colision.hit, character: entity }, colision.entity); //let others handle damage etc
         }
     }
 }
