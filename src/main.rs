@@ -129,7 +129,7 @@ fn spawn_complete_text(
         ..default()
     };
 
-    let mut text = Text2dBundle {
+    let text = Text2dBundle {
         text: Text::from_section("You win!", text_style.clone()),
         ..default()
     };
