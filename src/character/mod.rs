@@ -1,9 +1,50 @@
 use std::{ops::Mul, time::Duration};
 
-use bevy::{app::{Plugin, PreUpdate, Startup, Update}, ecs::query, math::Vec2, prelude::{Bundle, Commands, Component, Entity, Event, GamepadButtonType, KeyCode, Local, Query, Res}, reflect::Reflect, time::{Stopwatch, Time}, utils::{default, info}};
+use bevy::{
+    app::{
+        Plugin, 
+        PreStartup, 
+        PreUpdate, 
+        Update
+    }, asset::{
+        AssetServer, 
+        Handle
+    }, color::Color, log::info, math::{Vec2, VectorSpace}, prelude::{
+        Bundle, Commands, Component, Entity, Event, GamepadButtonType, Image, KeyCode, Local, Query, Res, Resource
+    }, reflect::Reflect, sprite::{
+        Sprite, 
+        SpriteBundle
+    }, time::{
+        Stopwatch, 
+        Time
+    }, utils::default
+};
 use bevy_ecs_ldtk::LdtkEntity;
-use bevy_rapier2d::{plugin::RapierConfiguration, prelude::{ActiveCollisionTypes, ActiveEvents, CharacterCollision, Collider, GravityScale, KinematicCharacterController, KinematicCharacterControllerOutput, ShapeCastHit, Velocity}};
-use leafwing_input_manager::{plugin::InputManagerPlugin, prelude::{ActionState, GamepadControlAxis, InputMap, KeyboardVirtualAxis, WithAxisProcessingPipelineExt}, Actionlike, InputManagerBundle};
+use bevy_rapier2d::{
+    plugin::RapierConfiguration, 
+    prelude::{
+        ActiveCollisionTypes, 
+        ActiveEvents, 
+        Collider, 
+        GravityScale, 
+        KinematicCharacterController, 
+        KinematicCharacterControllerOutput, 
+        ShapeCastHit, 
+        Velocity
+    }
+};
+use leafwing_input_manager::{
+    plugin::InputManagerPlugin, 
+    InputManagerBundle,
+    Actionlike, 
+    prelude::{
+        ActionState, 
+        GamepadControlAxis, 
+        InputMap, 
+        KeyboardVirtualAxis, 
+        WithAxisProcessingPipelineExt
+    },
+};
 
 use crate::unsorted::{Promise, PromiseProcedure, BevyPromiseResolver};
 
@@ -12,8 +53,8 @@ impl Plugin for CharacterPlugin {
     fn build(&self, app: &mut bevy::prelude::App) {
         app
             .register_ldtk_entity_with_promise::<Player>("Player")
-            .add_plugins(InputManagerPlugin::<InputAction>::default())
-            .add_systems(PreUpdate, player_sync_jump_tracker_and_grounded)
+            .add_plugins(InputManagerPlugin::<CharacterAction>::default())
+            .add_systems(PreStartup, load_sprites)
             .add_systems(Update, (player_movement, character_colision))
             ;
     }
@@ -22,9 +63,9 @@ impl Plugin for CharacterPlugin {
 
 
 #[derive(Actionlike, Reflect, Clone, Copy, Debug, PartialEq, Eq, Hash)]
-enum InputAction {
-    #[actionlike(Axis)] Move,
-    Jump,
+enum CharacterAction {
+    #[actionlike(Axis)]   Move,
+    #[actionlike(Button)] Jump,
 }
 
 
@@ -35,66 +76,117 @@ struct Player {
     // sprite_sheet_bundle: LdtkSpriteSheetBundle,
 }
 
-impl Player {
-    fn standard_input_map() -> InputManagerBundle<InputAction> {
-        InputManagerBundle::with_map(
-            InputMap::default()
-                // .with_axis(InputAction::Move, KeyboardVirtualAxis::HORIZONTAL_ARROW_KEYS) // if you use both arrows and ad you can get double the axis value
-                .with_axis(InputAction::Move, KeyboardVirtualAxis::AD)
-                .with_axis(InputAction::Move, GamepadControlAxis::LEFT_X.with_deadzone_symmetric(0.1))
+fn standard_character_input_map() -> InputManagerBundle<CharacterAction> {
+    InputManagerBundle::with_map(
+        InputMap::default()
+            // .with_axis(InputAction::Move, KeyboardVirtualAxis::HORIZONTAL_ARROW_KEYS) // if you use both arrows and ad you can get double the axis value
+            .with_axis(CharacterAction::Move, KeyboardVirtualAxis::AD)
+            .with_axis(CharacterAction::Move, GamepadControlAxis::LEFT_X.with_deadzone_symmetric(0.1))
 
-                .with(InputAction::Jump, KeyCode::Space)
-                .with(InputAction::Jump, GamepadButtonType::South)
-        )
-    }
+            .with(CharacterAction::Jump, KeyCode::Space)
+            .with(CharacterAction::Jump, GamepadButtonType::South)
+    )
 }
 
 impl PromiseProcedure for Player {
     fn resolve_promise<'w>(mut world: bevy::ecs::world::DeferredWorld<'w>, entity: bevy::prelude::Entity, component_id: bevy::ecs::component::ComponentId) {
+        let player_texture = world.resource::<ImageHandles>().player.clone_weak();
         world
             .commands()
             .entity(entity)
             .insert((
-                Self::standard_input_map(),
+                standard_character_input_map(),
                 KinematicCharacterController::default(),
                 Collider::capsule_y(4., 4.),
                 ActiveEvents::COLLISION_EVENTS,
                 ActiveCollisionTypes::all(),
-                JumpTracker::default(),
                 Velocity::default(),
                 GravityScale::default(),
+                SpriteBundle {
+                    texture: player_texture,
+                    sprite: Sprite {
+                        custom_size: Some(Vec2::new(8.0, 16.5)),
+                        ..default()
+                    },
+
+                    ..default()
+                },
             ));
         world.commands().entity(entity).remove_by_id(component_id);
     }
 }
 
-const MOVEMENT_SCALER: f32 = 200.0;
-const TEMP_GRAVITY_SCALER: f32 = 55.0;
+const MOVEMENT_VELOCITY: f32 = 200.0;
+const JUMP_VELOCITY: f32 = 100.0;
+const GRAVITY_INFLUENCE_JUMP: f32 = 0.3;
+const COYOTE_TIME: Duration = Duration::from_millis(100);
 
 fn player_movement(
     time: Res<Time>,
-    rapier_config: Res<RapierConfiguration>,
-    mut query: Query<(&ActionState<InputAction>, &mut JumpTracker, &mut KinematicCharacterController, &mut Velocity, &mut GravityScale)>,
+    physics: Res<RapierConfiguration>,
+    mut jumped: Local<bool>,
+    mut since_last_grounded: Local<Stopwatch>,
+    mut query: Query<(
+        &ActionState<CharacterAction>, 
+        &mut KinematicCharacterController,
+        Option<&KinematicCharacterControllerOutput>, 
+        &mut Velocity, 
+        &GravityScale
+    )>,
 ) {
-    for (action, mut jump, mut controller, mut velocity, mut gravity_scale) in query.iter_mut() {
-        let horizontal_movement = action
-            .axis_data(&InputAction::Move)
-            .unwrap_or(&default())
-            .value 
-            .mul(MOVEMENT_SCALER) 
-            .mul(time.delta_seconds());
 
-        if action.pressed(&InputAction::Jump) {
-            jump.try_jump(|| {
-                *velocity = Velocity::linear(Vec2::Y * 100.0);        
-                gravity_scale.0 = 0.3;
-            });
-        } 
-        else {
-            gravity_scale.0 = 1.0;
+    for 
+    (
+        input, 
+        mut character_controller, 
+        character_output, 
+        mut velocity, 
+        gravity_scale
+    ) 
+    in query.iter_mut() 
+    {
+        let mut gravity_scale = gravity_scale.0;
+        let mut grounded = character_output
+            .map(|output| output.grounded)
+            .unwrap_or(false);
+
+        if grounded { 
+            since_last_grounded.reset(); 
         }
-        *velocity = Velocity::linear(rapier_config.gravity * gravity_scale.0 * time.delta_seconds() * TEMP_GRAVITY_SCALER + velocity.linvel);
-        controller.translation = Some(Vec2::new(horizontal_movement, velocity.linvel.y * time.delta_seconds()))
+        else {
+            since_last_grounded.tick(time.delta());
+            grounded = since_last_grounded.elapsed() < COYOTE_TIME;  
+        }
+
+        if input.pressed(&CharacterAction::Jump) {
+            gravity_scale *= GRAVITY_INFLUENCE_JUMP;
+            if grounded && !(*jumped) { 
+                velocity.linvel.y = JUMP_VELOCITY; 
+                *jumped = true;
+            }
+        }
+        
+        let gravity = physics.gravity * gravity_scale;
+        let acceleration = gravity;
+        velocity.linvel += acceleration * time.delta_seconds();
+        
+        let input_axis_horizontal = input
+            .axis_data(&CharacterAction::Move)
+            .map(|axis| axis.value)
+            .unwrap_or_default();
+
+        velocity.linvel.x = input_axis_horizontal * MOVEMENT_VELOCITY;        
+               
+        if grounded {
+            if !(*jumped) {
+                velocity.linvel.y = 0.0;
+            }
+        }
+        else {
+            *jumped = false;
+        }
+        
+        character_controller.translation = Some(velocity.linvel * time.delta_seconds());
     }
 }
 
@@ -128,7 +220,7 @@ struct JumpTracker {
 impl JumpTracker {
     const COYOTE_TIME: Duration = Duration::from_millis(100);
 
-    fn can_jump(&self) -> bool { self.state.can_jump() || (self.state == Jump::Impossible && self.time_since_last.elapsed() < Self::COYOTE_TIME) }
+    fn can_jump(&self) -> bool { self.state.can_jump() || (self.state == Jump::Impossible && self.time_since_last.elapsed() < Self::COYOTE_TIME) } // COYOTE_TIME should be greater than the time since grounded!!
     fn try_jump(&mut self, jump_action: impl FnOnce()) { 
         if self.can_jump() { unsafe { self.jump(jump_action); } } 
     }
@@ -139,21 +231,8 @@ impl JumpTracker {
     }
 }
 
-fn player_sync_jump_tracker_and_grounded(
-    mut query: Query<(&mut JumpTracker, &KinematicCharacterControllerOutput)>
-) {
-    for (mut jump, check) in query.iter_mut() {
-        jump.state = match jump.state {
-            Jump::Performing |
-            Jump::Impossible => if check.grounded { Jump::Possible } else { continue; },
-            Jump::Started => if !check.grounded { Jump::Performing } else { continue; }, // #! NOTE: if jump won't get off the ground this wil fail!
-            Jump::Possible => continue,
-        }
-    }
-}
-
 #[derive(Event, Debug)]
-pub struct CollidedWithCharacter{
+pub struct CharacterColision{
     pub hit: ShapeCastHit,
     pub character: Entity
 }
@@ -164,7 +243,22 @@ fn character_colision(
 ) {
     for (entity, controller_output) in query.iter_mut() {
         for colision in controller_output.collisions.clone() {
-            commands.trigger_targets(CollidedWithCharacter{ hit: colision.hit, character: entity }, colision.entity); //let others handle damage etc
+            commands.trigger_targets(CharacterColision{ hit: colision.hit, character: entity }, colision.entity);
         }
     }
+}
+
+#[derive(Resource)]
+pub(crate) struct ImageHandles {
+    pub player: Handle<Image>,
+    pub test_enemy: Handle<Image>,
+}
+
+fn load_sprites(
+    mut commands: Commands,
+    server: Res<AssetServer>
+) {
+    let player = server.load("Character.png");
+    let test_enemy = server.load("Enemy.png");
+    commands.insert_resource(ImageHandles { player, test_enemy });
 }
