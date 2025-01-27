@@ -36,7 +36,7 @@ pub fn main() {
         .add_plugins(CharacterPlugin)
         .add_plugins(LDTKEnumTagPluginCustom)
 
-        .add_systems(PreStartup, |mut rapier_config: ResMut<RapierConfiguration>| rapier_config.gravity = Vec2::NEG_Y * 5.)
+        .add_systems(PreStartup, |mut physics: ResMut<RapierConfiguration>| physics.gravity = Vec2::NEG_Y * 275.0)
         
         .add_systems(Startup, setup)
         .insert_resource(LevelSelection::index(0))

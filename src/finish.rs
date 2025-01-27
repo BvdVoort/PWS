@@ -2,7 +2,7 @@ use bevy::{app::{Plugin, PreStartup}, ecs::{component::ComponentId, world::Defer
 use bevy_ecs_ldtk::{app::LdtkEntityAppExt, LdtkEntity};
 use bevy_rapier2d::prelude::{Collider, CollisionEvent, CollisionGroups, Group};
 
-use crate::{character::CollidedWithCharacter, collision::LocalGroupNames, enemies::{ColliderBundle, ObservableColliderBundle}, game_flow::GameState, unsorted::{Promise, PromiseProcedure}};
+use crate::{character::CharacterColision, collision::LocalGroupNames, enemies::{ColliderBundle, ObservableColliderBundle}, game_flow::GameState, unsorted::{Promise, PromiseProcedure}};
 
 
 #[derive(Default, Bundle, LdtkEntity)]
@@ -44,7 +44,7 @@ impl PromiseProcedure for Finish {
                         filters: Group::PLAYER,
                     }
                 ))
-                .observe(|_trigger: Trigger<CollidedWithCharacter>, mut next_state: ResMut<NextState<GameState>>| {
+                .observe(|_trigger: Trigger<CharacterColision>, mut next_state: ResMut<NextState<GameState>>| {
                     next_state.set(GameState::Completed);
                 });
             });

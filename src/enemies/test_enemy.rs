@@ -1,10 +1,10 @@
 use std::{fmt::Debug, marker::PhantomData, time::Duration};
 
-use bevy::{app::{App, Plugin, PostStartup, PreStartup, Startup, Update}, ecs::{component::{self, ComponentId, Tick}, observer, query, system::{IntoObserverSystem, ObserverSystem}, world::{self, DeferredWorld}}, log::error, math::{IVec2, Vec2}, prelude::{in_state, BuildChildren, Bundle, Commands, Component, DespawnRecursiveExt, Entity, Event, FromWorld, IntoSystem, IntoSystemConfigs, Local, Mut, NextState, Observer, Query, Res, ResMut, Resource, SpatialBundle, Transform, Trigger, With, World}, reflect::GetField, scene::ron::value, text::{Text, Text2dBundle, TextStyle}, time::{Stopwatch, Time}, ui::Style, utils::{default, info}};
+use bevy::{app::{App, Plugin, PostStartup, PreStartup, Startup, Update}, ecs::{component::{self, ComponentId, Tick}, observer, query, system::{IntoObserverSystem, ObserverSystem}, world::{self, DeferredWorld}}, log::error, math::{IVec2, Vec2}, prelude::{in_state, BuildChildren, Bundle, Commands, Component, DespawnRecursiveExt, Entity, Event, FromWorld, IntoSystem, IntoSystemConfigs, Local, Mut, NextState, Observer, Query, Res, ResMut, Resource, SpatialBundle, Transform, Trigger, With, World}, reflect::GetField, scene::ron::value, sprite::{Sprite, SpriteBundle}, text::{Text, Text2dBundle, TextStyle}, time::{Stopwatch, Time}, ui::Style, utils::{default, info}};
 use bevy_ecs_ldtk::{app::LdtkEntityAppExt, prelude::LdtkFields, utils::grid_coords_to_translation, EntityInstance, GridCoords, LdtkEntity, };
 use bevy_rapier2d::{na::Translation, prelude::{ActiveCollisionTypes, ActiveEvents, Collider, CollisionGroups, Group, Sensor}};
 
-use crate::{character::CollidedWithCharacter, collision::LocalGroupNames, game_flow::GameState, unsorted::{BevyPromiseResolver, Promise, PromiseProcedure}};
+use crate::{character::{CharacterColision, ImageHandles}, collision::LocalGroupNames, game_flow::GameState, unsorted::{BevyPromiseResolver, Promise, PromiseProcedure}};
 use super::{ColliderBundle, ObservableColliderBundle};
 
 #[derive(Default, Bundle, LdtkEntity)]
@@ -63,12 +63,13 @@ impl PromiseProcedure for TestEnemy {
             .entity(entity)
             .insert(
                 ColliderBundle {
-                collider: Collider::capsule_y(TestEnemy::HALF_CAPSULE_HEIGHT, TestEnemy::CORNER_RADIUS),
-                collision_groups: CollisionGroups {
-                    memberships: Group::TEST_ENEMY,
-                    filters: Group::ALL & !Group::TEST_ENEMY_SENSOR
+                    collider: Collider::capsule_y(TestEnemy::HALF_CAPSULE_HEIGHT, TestEnemy::CORNER_RADIUS),
+                    collision_groups: CollisionGroups {
+                        memberships: Group::TEST_ENEMY,
+                        filters: Group::ALL & !Group::TEST_ENEMY_SENSOR
+                    },
                 },
-            })
+            )
             .with_children(|children| {
                 children.spawn(observer);
             })
@@ -80,7 +81,7 @@ impl PromiseProcedure for TestEnemy {
 }
 
 pub fn character_colision_handler(
-    trigger: Trigger<CollidedWithCharacter>,
+    trigger: Trigger<CharacterColision>,
     mut commands: Commands,
     mut next_state: ResMut<NextState<GameState>>,
     // damage query
